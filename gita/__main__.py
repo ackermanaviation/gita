@@ -90,6 +90,54 @@ def f_add(args: argparse.Namespace):
         utils.write_to_groups_file(groups, "w")
 
 
+def f_untracked(args: argparse.Namespace):
+    repos = utils.get_repos()
+    paths = args.paths
+    existing_paths = [repos[key]['path'] for key in repos]
+
+    for path in paths:
+        if not os.path.isdir(path):
+            print("ERROR:", path, "is not a directory")
+            continue
+
+        # base_paths are directories that are tracked repo paths or parent directories of tracked repos.
+        # (this is includes non-immediate parents) but *excludes* parents of the path to search.
+        # i.e. for repo /a/b/c/d and search path /a/b/:
+        # base_paths are /a/b/c/d, /a/b/c, /a/b (parents of repo) but NOT /a or / (parents of search path)
+        # this is used to identify which paths to include in the search output
+        base_paths = []
+        for ep in existing_paths:
+            if ep.startswith(path):
+                base_paths.extend(utils.split_paths(ep, path))
+        base_paths = list(set(base_paths))  # remove duplicates
+
+        # walk through search path and print:
+        #   a) any files in non-tracked directories
+        #   b) directories that are not tracked repos and do not contain tracked repos in their subdirectory path
+        for root, dirs, files in os.walk(path):
+            # remove existing dirs or "." dirs
+            # must be removed in place for walk to work properly
+            for dir_ in dirs[:]:
+                if os.path.join(root, dir_) in existing_paths:
+                    dirs.remove(dir_)
+                elif dir_.startswith("."):
+                    dirs.remove(dir_)
+
+            if root in base_paths:
+                # this is not a repo we're tracking, but some subdirectory is tracked
+                # so print out any unknown files, then keep walking
+
+                # remove "." files from output
+                files = [file_ for file_ in files if not file_.startswith(".")]
+                for file_ in files:
+                    print(os.path.join(root, file_))
+            else:
+                # nothing past here is a repo we're tracking, so everything here is untracked
+                # don't walk further, but report this location
+                print(root)
+                dirs.clear()  # stop walking
+
+
 def f_rename(args: argparse.Namespace):
     repos = utils.get_repos()
     utils.rename_repo(repos, args.repo[0], args.new_name)
@@ -418,6 +466,11 @@ def main(argv=None):
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {version}")
 
     # bookkeeping sub-commands
+    p_untracked = subparsers.add_parser("untracked", description="show untracked", help="show untracked content")
+    p_untracked.add_argument("paths", nargs="+", type=_path_name, help="paths to search for untracked content")
+
+    p_untracked.set_defaults(func=f_untracked)
+
     p_add = subparsers.add_parser("add", description="add repo(s)", help="add repo(s)")
     p_add.add_argument("paths", nargs="+", type=_path_name, help="repo(s) to add")
     p_add.add_argument("-n", "--dry-run", action="store_true", help="dry run")

@@ -510,3 +510,33 @@ def parse_repos_and_rest(
         # if not set here, all repos are chosen
         repos = chosen
     return repos, input[i:]
+
+
+def split_paths(path: str, base_path: str) -> List[str]:
+    """
+    Return all parent paths up to and including the base_path
+
+    e.g.
+        split_paths(path="/a/b/c/d/e", base_path="/a/b")
+    output:
+        ['/a/b/c/d/e', '/a/b/c/d', '/a/b/c', '/a/b']
+
+    if base_path is not a parent directory of path, all parent paths will
+    be returned.
+
+    e.g.
+        split_paths(path="/a/b/c/d/e", base_path="/random/file")
+    output:
+        ['/a/b/c/d/e', '/a/b/c/d', '/a/b/c', '/a/b', '/a', '/']
+
+    :param path: the path to split
+    :param base_path: The base path to stop splitting at
+    :return: list of parent paths
+    """
+    paths = [path, ]
+    while path != base_path:
+        path = os.path.dirname(path)
+        paths.append(path)
+        if path == os.path.dirname(path):  # reached the filesystem base
+            break
+    return paths
